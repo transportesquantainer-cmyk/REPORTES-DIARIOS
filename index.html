@@ -30,6 +30,10 @@ textarea{min-height:70px;resize:vertical}
 .msg.error{color:var(--rojo)}
 .ayuda{font-size:13px;color:var(--gris);margin:-6px 0 12px}
 [hidden]{display:none!important}
+.dia{border:1px solid var(--borde);border-radius:10px;margin-bottom:10px;overflow:hidden;background:var(--blanco)}
+.dia summary{padding:12px 14px;font-weight:600;color:var(--verde);background:var(--verde-claro);cursor:pointer;text-transform:capitalize}
+.rep{padding:12px 14px;border-top:1px solid var(--borde)}
+.rep b{display:block;margin-bottom:2px}
 </style>
 </head>
 <body>
@@ -85,6 +89,16 @@ textarea{min-height:70px;resize:vertical}
     </form>
 
     <p class="msg" id="msg"></p>
+
+    <section class="card" id="historial">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:6px">
+        <h2 style="margin:0">Mis reportes</h2>
+        <button class="btn peq sec" id="actualizar" type="button">Actualizar</button>
+      </div>
+      <p class="ayuda">Están agrupados por día. Solo se pueden cambiar desde la oficina: si hay un error, avisa al administrador.</p>
+      <div id="dias"></div>
+      <p class="msg" id="msgHist"></p>
+    </section>
   </section>
 
 </main>
@@ -102,6 +116,31 @@ function fechaHoy(){
   return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
 }
 function mensaje(el, texto, error){ el.textContent = texto; el.classList.toggle("error", !!error); }
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+function etiquetaDia(iso){
+  return new Date(iso + "T00:00:00").toLocaleDateString("es-CO", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+}
+
+/* ---------- Historial por día (solo lectura) ---------- */
+async function cargarHistorial(){
+  if(!sesion) return;
+  const msgH = $("#msgHist");
+  mensaje(msgH, "Cargando...");
+  const { data, error } = await sb.rpc("mis_reportes", { p_id: sesion.id, p_pin: sesion.pin, p_dias: 60 });
+  if(error){ return mensaje(msgH, "No se pudo cargar el historial. Revisa la señal.", true); }
+  mensaje(msgH, "");
+  const grupos = {};
+  data.forEach(r => { grupos[r.fecha] = grupos[r.fecha] || []; grupos[r.fecha].push(r); });
+  const fechas = Object.keys(grupos).sort().reverse();
+  $("#dias").innerHTML = fechas.length ? fechas.map((f, i) => `<details class="dia" ${i === 0 ? "open" : ""}>
+    <summary>${esc(etiquetaDia(f))} · ${grupos[f].length} servicio${grupos[f].length === 1 ? "" : "s"}</summary>
+    ${grupos[f].map(r => `<div class="rep"><b>${esc(r.cliente)}</b>
+      ${esc(r.origen)} → ${esc(r.destino)}
+      ${r.detalle ? `<br><span class="ayuda">${esc(r.detalle)}</span>` : ""}
+      ${r.tiene_firma ? `<br><span class="ayuda">Con firma</span>` : ""}</div>`).join("")}
+  </details>`).join("") : `<p class="ayuda">Todavía no tienes reportes.</p>`;
+}
+$("#actualizar").onclick = cargarHistorial;
 
 /* ---------- Ingreso ---------- */
 async function cargarConductores(){
@@ -133,6 +172,7 @@ function mostrarInicio(){
   $("#saludo").textContent = "Hola, " + sesion.nombre;
   $("#f_fecha").value = fechaHoy();
   mensaje($("#msg"), "");
+  cargarHistorial();
 }
 $("#chk").onchange = () => {
   $("#form").hidden = !$("#chk").checked;
@@ -175,6 +215,7 @@ $("#form").onsubmit = async e => {
   limpiarFormulario();
   $("#chk").checked = false; $("#form").hidden = true;
   mensaje($("#msg"), "Servicio reportado. Gracias.");
+  cargarHistorial();
 };
 
 /* ---------- Arranque ---------- */
