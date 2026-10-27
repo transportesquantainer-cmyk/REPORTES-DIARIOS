@@ -90,6 +90,13 @@ textarea{min-height:70px;resize:vertical}
 
     <p class="msg" id="msg"></p>
 
+    <section class="card" id="asignados">
+      <h2>Mis servicios asignados</h2>
+      <p class="ayuda">Servicios que la oficina programó para ti. Solo para consultar.</p>
+      <div id="listaAsignados"></div>
+      <p class="msg" id="msgAsignados"></p>
+    </section>
+
     <section class="card" id="historial">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:6px">
         <h2 style="margin:0">Mis reportes</h2>
@@ -143,6 +150,24 @@ async function cargarHistorial(){
 }
 $("#actualizar").onclick = cargarHistorial;
 
+/* ---------- Servicios asignados por la oficina (solo lectura) ---------- */
+async function cargarAsignados(){
+  if(!sesion) return;
+  const msgA = $("#msgAsignados");
+  mensaje(msgA, "Cargando...");
+  const { data, error } = await sb.rpc("mis_asignaciones", { p_id: sesion.id, p_pin: sesion.pin, p_dias: 7 });
+  if(error){ return mensaje(msgA, "No se pudieron cargar tus servicios. Revisa la señal.", true); }
+  mensaje(msgA, "");
+  $("#listaAsignados").innerHTML = data.length ? data.map(a => `<div class="rep">
+      <b>${esc(a.cliente)}</b>
+      <span class="ayuda">${esc(etiquetaDia(a.fecha))}</span><br>
+      ${esc(a.origen || "")} ${a.destino ? "→ " + esc(a.destino) : ""}
+      ${a.vehiculo ? `<br><span class="ayuda">Equipo: ${esc(a.vehiculo)}</span>` : ""}
+      ${a.detalle ? `<br><span class="ayuda">${esc(a.detalle)}</span>` : ""}
+      <br><span class="ayuda">Estado: ${esc(a.estado)}</span></div>`).join("")
+    : `<p class="ayuda">No tienes servicios asignados para los próximos días.</p>`;
+}
+
 /* ---------- Ingreso ---------- */
 async function cargarConductores(){
   const { data, error } = await sb.rpc("lista_conductores");
@@ -173,6 +198,7 @@ function mostrarInicio(){
   $("#saludo").textContent = "Hola, " + sesion.nombre;
   $("#f_fecha").value = fechaHoy();
   mensaje($("#msg"), "");
+  cargarAsignados();
   cargarHistorial();
 }
 $("#chk").onchange = () => {
