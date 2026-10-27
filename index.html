@@ -129,6 +129,16 @@ function etiquetaDia(iso){
   return texto.charAt(0).toUpperCase() + texto.slice(1);
 }
 
+/* ---------- Marcar un servicio asignado como realizado ---------- */
+async function marcarRealizado(idAsignacion){
+  if(!confirm("¿Confirmas que este servicio ya fue realizado?")) return;
+  const msgA = $("#msgAsignados");
+  const { data, error } = await sb.rpc("cerrar_asignacion", { p_id: sesion.id, p_pin: sesion.pin, p_asignacion: idAsignacion });
+  if(error || !data){ return mensaje(msgA, "No se pudo marcar. Revisa la señal e inténtalo otra vez.", true); }
+  mensaje(msgA, "Servicio marcado como realizado.");
+  cargarAsignados();
+}
+
 /* ---------- Historial por día (solo lectura) ---------- */
 async function cargarHistorial(){
   if(!sesion) return;
@@ -158,13 +168,19 @@ async function cargarAsignados(){
   const { data, error } = await sb.rpc("mis_asignaciones", { p_id: sesion.id, p_pin: sesion.pin, p_dias: 7 });
   if(error){ return mensaje(msgA, "No se pudieron cargar tus servicios. Revisa la señal.", true); }
   mensaje(msgA, "");
-  $("#listaAsignados").innerHTML = data.length ? data.map(a => `<div class="rep">
+  $("#listaAsignados").innerHTML = data.length ? data.map(a => {
+    const pendiente = a.estado === "Programado" || a.estado === "En curso";
+    return `<div class="rep">
       <b>${esc(a.cliente)}</b>
       <span class="ayuda">${esc(etiquetaDia(a.fecha))}</span><br>
       ${esc(a.origen || "")} ${a.destino ? "→ " + esc(a.destino) : ""}
       ${a.vehiculo ? `<br><span class="ayuda">Equipo: ${esc(a.vehiculo)}</span>` : ""}
       ${a.detalle ? `<br><span class="ayuda">${esc(a.detalle)}</span>` : ""}
-      <br><span class="ayuda">Estado: ${esc(a.estado)}</span></div>`).join("")
+      <br><span class="ayuda">Estado: ${esc(a.estado)}</span>
+      ${pendiente
+        ? `<div style="margin-top:10px"><button class="btn" type="button" onclick="marcarRealizado('${a.id}')">Marcar como realizado</button></div>`
+        : ""}</div>`;
+  }).join("")
     : `<p class="ayuda">No tienes servicios asignados para los próximos días.</p>`;
 }
 
