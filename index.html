@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#418357">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<title>Reportar servicio</title>
+<style>
+:root{--verde:#418357;--verde2:#52a571;--verde-claro:#e8f3ec;--tinta:#1d2a22;--gris:#5f6b64;--borde:#d5ddd8;--fondo:#f4f7f5;--blanco:#fff;--rojo:#b3261e}
+*{box-sizing:border-box}
+body{margin:0;font-family:"Segoe UI",Arial,sans-serif;background:var(--fondo);color:var(--tinta);font-size:16px}
+header{background:var(--verde);color:#fff;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px}
+header h1{font-size:18px;margin:0;font-weight:600}
+main{padding:16px;max-width:520px;margin:0 auto}
+.card{background:var(--blanco);border:1px solid var(--borde);border-radius:12px;padding:16px;margin-bottom:14px}
+h2{font-size:17px;margin:0 0 10px;color:var(--verde)}
+label{display:flex;flex-direction:column;gap:6px;font-size:14px;color:var(--gris);margin-bottom:12px}
+input,select,textarea{font:inherit;font-size:16px;color:var(--tinta);border:1px solid var(--borde);border-radius:8px;padding:11px 12px;background:var(--blanco);width:100%}
+textarea{min-height:70px;resize:vertical}
+.btn{background:var(--verde);color:#fff;border:0;border-radius:10px;padding:14px 16px;font:inherit;font-weight:600;width:100%;cursor:pointer}
+.btn:disabled{opacity:.6}
+.btn.sec{background:var(--blanco);color:var(--verde);border:1px solid var(--verde)}
+.btn.peq{width:auto;padding:8px 12px;font-size:14px}
+.casilla{display:flex;align-items:center;gap:14px;background:var(--verde-claro);border:2px solid var(--verde);border-radius:12px;padding:18px;font-size:20px;font-weight:700;color:var(--verde);cursor:pointer;margin:0}
+.casilla input{width:28px;height:28px;margin:0;accent-color:var(--verde);flex:none}
+.firma{display:block;width:100%;aspect-ratio:600/220;border:1px dashed var(--borde);border-radius:8px;background:var(--blanco);touch-action:none}
+.msg{min-height:22px;font-size:15px;margin:12px 0 0;text-align:center}
+.msg.error{color:var(--rojo)}
+.ayuda{font-size:13px;color:var(--gris);margin:-6px 0 12px}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<header>
+  <h1>Reportar servicio</h1>
+  <button class="btn peq sec" id="salir" hidden>Salir</button>
+</header>
+<main>
+
+  <!-- Ingreso del conductor -->
+  <section id="login" class="card" hidden>
+    <h2>Ingresa</h2>
+    <label>Conductor
+      <select id="lista"></select>
+    </label>
+    <label>PIN
+      <input id="pin" type="password" inputmode="numeric" maxlength="8" autocomplete="off">
+    </label>
+    <button class="btn" id="entrar">Entrar</button>
+    <p class="msg" id="msgLogin"></p>
+  </section>
+
+  <!-- Pantalla del conductor -->
+  <section id="inicio" hidden>
+    <p id="saludo" style="margin:0 0 12px;font-weight:600"></p>
+
+    <label class="casilla">
+      <input type="checkbox" id="chk">
+      <span>Reportar servicio</span>
+    </label>
+
+    <form id="form" class="card" hidden>
+      <h2>Nuevo servicio</h2>
+      <label>Fecha
+        <input type="date" id="f_fecha" required>
+      </label>
+      <label>Cliente *
+        <input id="f_cliente" required placeholder="Nombre del cliente">
+      </label>
+      <label>Origen *
+        <input id="f_origen" required>
+      </label>
+      <label>Destino *
+        <input id="f_destino" required>
+      </label>
+      <label>Detalle del servicio
+        <textarea id="f_detalle" placeholder="Qué se hizo, carga, observaciones"></textarea>
+      </label>
+      <div style="font-size:14px;color:var(--gris);margin-bottom:6px">Firma del cliente (si aplica)</div>
+      <canvas id="firma" class="firma" width="600" height="220"></canvas>
+      <p class="ayuda"><button type="button" class="btn peq sec" id="limpiarFirma">Borrar firma</button></p>
+      <button class="btn" id="enviar" type="submit">Enviar reporte</button>
+    </form>
+
+    <p class="msg" id="msg"></p>
+  </section>
+
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="config.js"></script>
+<script>
+const $ = s => document.querySelector(s);
+const sb = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_KEY);
+let sesion = null;
+try { sesion = JSON.parse(localStorage.getItem("qc_sesion")) || null; } catch(e) { sesion = null; }
+
+function fechaHoy(){
+  const d = new Date();
+  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+}
+function mensaje(el, texto, error){ el.textContent = texto; el.classList.toggle("error", !!error); }
+
+/* ---------- Ingreso ---------- */
+async function cargarConductores(){
+  const { data, error } = await sb.rpc("lista_conductores");
+  if(error) throw error;
+  $("#lista").innerHTML = data.map(c => `<option value="${c.id}">${c.nombre}</option>`).join("");
+}
+async function mostrarLogin(){
+  $("#login").hidden = false; $("#inicio").hidden = true; $("#salir").hidden = true;
+  try { await cargarConductores(); }
+  catch(e){ mensaje($("#msgLogin"), "Sin conexión. Intenta de nuevo con señal.", true); }
+}
+$("#entrar").onclick = async () => {
+  const id = $("#lista").value, pin = $("#pin").value;
+  if(!id || !pin) return mensaje($("#msgLogin"), "Escoge tu nombre y escribe tu PIN", true);
+  const { data, error } = await sb.rpc("validar_conductor", { p_id: id, p_pin: pin });
+  if(error) return mensaje($("#msgLogin"), "Sin conexión. Intenta de nuevo con señal.", true);
+  if(!data) return mensaje($("#msgLogin"), "PIN incorrecto", true);
+  sesion = { id, nombre: $("#lista option:checked").textContent, pin };
+  localStorage.setItem("qc_sesion", JSON.stringify(sesion));
+  $("#pin").value = "";
+  mostrarInicio();
+};
+$("#salir").onclick = () => { localStorage.removeItem("qc_sesion"); sesion = null; mostrarLogin(); };
+
+/* ---------- Pantalla del conductor ---------- */
+function mostrarInicio(){
+  $("#login").hidden = true; $("#inicio").hidden = false; $("#salir").hidden = false;
+  $("#saludo").textContent = "Hola, " + sesion.nombre;
+  $("#f_fecha").value = fechaHoy();
+  mensaje($("#msg"), "");
+}
+$("#chk").onchange = () => {
+  $("#form").hidden = !$("#chk").checked;
+  if($("#chk").checked) $("#f_cliente").focus();
+};
+
+/* ---------- Firma ---------- */
+const cv = $("#firma"), ctx = cv.getContext("2d");
+let firmada = false, pintando = false, ultimo = null;
+ctx.lineWidth = 3; ctx.lineCap = "round"; ctx.strokeStyle = "#1d2a22";
+const punto = e => { const r = cv.getBoundingClientRect(); return { x: (e.clientX-r.left)*cv.width/r.width, y: (e.clientY-r.top)*cv.height/r.height }; };
+cv.onpointerdown = e => { pintando = true; ultimo = punto(e); try { cv.setPointerCapture(e.pointerId); } catch(_) {} };
+cv.onpointermove = e => { if(!pintando) return; const p = punto(e); ctx.beginPath(); ctx.moveTo(ultimo.x, ultimo.y); ctx.lineTo(p.x, p.y); ctx.stroke(); ultimo = p; firmada = true; };
+cv.onpointerup = cv.onpointercancel = () => { pintando = false; };
+$("#limpiarFirma").onclick = () => { ctx.clearRect(0,0,cv.width,cv.height); firmada = false; };
+
+function limpiarFormulario(){
+  ["#f_cliente","#f_origen","#f_destino","#f_detalle"].forEach(s => $(s).value = "");
+  $("#f_fecha").value = fechaHoy();
+  ctx.clearRect(0,0,cv.width,cv.height); firmada = false;
+}
+
+/* ---------- Envío ---------- */
+$("#form").onsubmit = async e => {
+  e.preventDefault();
+  const datos = {
+    p_id: sesion.id, p_pin: sesion.pin,
+    p_fecha: $("#f_fecha").value,
+    p_cliente: $("#f_cliente").value.trim(),
+    p_origen: $("#f_origen").value.trim(),
+    p_destino: $("#f_destino").value.trim(),
+    p_detalle: $("#f_detalle").value.trim(),
+    p_firma: firmada ? cv.toDataURL("image/png") : null
+  };
+  if(!datos.p_cliente || !datos.p_origen || !datos.p_destino) return mensaje($("#msg"), "Completa cliente, origen y destino", true);
+  $("#enviar").disabled = true;
+  const { error } = await sb.rpc("reportar_servicio", datos);
+  $("#enviar").disabled = false;
+  if(error) return mensaje($("#msg"), "No se pudo enviar. Revisa la señal e inténtalo otra vez.", true);
+  limpiarFormulario();
+  $("#chk").checked = false; $("#form").hidden = true;
+  mensaje($("#msg"), "Servicio reportado. Gracias.");
+};
+
+/* ---------- Arranque ---------- */
+if("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js");
+if(sesion) mostrarInicio(); else mostrarLogin();
+</script>
+</body>
+</html>
