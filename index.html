@@ -31,7 +31,7 @@ textarea{min-height:70px;resize:vertical}
 .ayuda{font-size:13px;color:var(--gris);margin:-6px 0 12px}
 [hidden]{display:none!important}
 .dia{border:1px solid var(--borde);border-radius:10px;margin-bottom:10px;overflow:hidden;background:var(--blanco)}
-.dia summary{padding:12px 14px;font-weight:600;color:var(--verde);background:var(--verde-claro);cursor:pointer;text-transform:capitalize}
+.dia summary{padding:12px 14px;font-weight:600;color:var(--verde);background:var(--verde-claro);cursor:pointer}
 .rep{padding:12px 14px;border-top:1px solid var(--borde)}
 .rep b{display:block;margin-bottom:2px}
 </style>
@@ -118,7 +118,8 @@ function fechaHoy(){
 function mensaje(el, texto, error){ el.textContent = texto; el.classList.toggle("error", !!error); }
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 function etiquetaDia(iso){
-  return new Date(iso + "T00:00:00").toLocaleDateString("es-CO", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  const texto = new Date(iso + "T00:00:00").toLocaleDateString("es-CO", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  return texto.charAt(0).toUpperCase() + texto.slice(1);
 }
 
 /* ---------- Historial por día (solo lectura) ---------- */
@@ -132,7 +133,7 @@ async function cargarHistorial(){
   const grupos = {};
   data.forEach(r => { grupos[r.fecha] = grupos[r.fecha] || []; grupos[r.fecha].push(r); });
   const fechas = Object.keys(grupos).sort().reverse();
-  $("#dias").innerHTML = fechas.length ? fechas.map((f, i) => `<details class="dia" ${i === 0 ? "open" : ""}>
+  $("#dias").innerHTML = fechas.length ? fechas.map(f => `<details class="dia">
     <summary>${esc(etiquetaDia(f))} · ${grupos[f].length} servicio${grupos[f].length === 1 ? "" : "s"}</summary>
     ${grupos[f].map(r => `<div class="rep"><b>${esc(r.cliente)}</b>
       ${esc(r.origen)} → ${esc(r.destino)}
